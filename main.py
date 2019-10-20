@@ -11,7 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from torchsummary import summary 
 
-from try_model import CNN, BnCNN, CeCNN, BothCNN
+from model import CNN, BnCNN, CeCNN, BothCNN
 
 start_time = time.time() #Note down start of code run 
 
@@ -23,11 +23,9 @@ torch.manual_seed(seed)
 
 """DATA LOADING"""
 """MAKE SURE YOU CHANGE THE ROOT HERE TO YOUR FOLDER, IF YOU END UP RUNNING THIS CODE"""
-personal_data = torchvision.datasets.ImageFolder(root=r'\Users\Pranav\PycharmProjects\assignment 4\Agnihotri_1004148914', 
-                                        transform=torchvision.transforms.ToTensor()) # Only my personal pictures
 
-data = torchvision.datasets.ImageFolder(root=r'\Users\Pranav\PycharmProjects\assignment 4\asl_images', 
-                                        transform=torchvision.transforms.ToTensor()) # Full dataset
+data = torchvision.datasets.ImageFolder(root=r'### point to dataset folder on your machine here###', 
+                                        transform=torchvision.transforms.ToTensor()) # Data comes as a tensor scaled between 0 and 1
 
 #_____________________________________________________________________________________________________________
 """PART 1 CODE: VISUALIZING A BATCH"""
@@ -35,11 +33,10 @@ data = torchvision.datasets.ImageFolder(root=r'\Users\Pranav\PycharmProjects\ass
 letters = ('A', 'B', 'C', 'D',
            'E', 'F', 'G', 'H', 'I', 'K')
 
-data_loader_for_visualization = DataLoader(personal_data, batch_size=4, shuffle=True)
+data_loader_for_visualization = DataLoader(data, batch_size=4, shuffle=True)
 
 # Function below taken from PyTorch guide, some modifications made, but credit where credit is due 
 def imshow(img):
-    
     npimg = img.numpy() #Convert from a tensor to numpy 
     plt.imshow(np.transpose(npimg, (1, 2, 0)))
     plt.show()
@@ -106,7 +103,7 @@ transforms= torchvision.transforms.Compose(
      torchvision.transforms.Normalize((channel_mean[0], channel_mean[1], channel_mean[2]), (channel_std[0], channel_std[1], channel_std[2]))])
 
 # Get the same dataset again but this time, we have the normalization component 
-data = torchvision.datasets.ImageFolder(root=r'\Users\Pranav\PycharmProjects\assignment 4\asl_images', 
+data = torchvision.datasets.ImageFolder(root=r'### point to dataset folder on your machine here###', 
                                         transform=transforms) 
 
 #_________________________________________________________________________________________________
@@ -115,8 +112,8 @@ data = torchvision.datasets.ImageFolder(root=r'\Users\Pranav\PycharmProjects\ass
 # I get all 1370 images in order of class, just the way it is in the folders. This means that
 # if I take the first 80% of images in each class for training and the latter 20% of each class
 # for validation, then I effectively create those sets with DIFFERENT people's photos, which 
-# is the method that I think is best. So the code below does precisely that.
-# It may seem a little janky but I didn't really find any in built function to do this kind of splitting
+# is the method that I think is best. This helps generalization and forces the model
+# to learn sign language, not overfit on the hands themselves. So the code below does precisely that.
 # At the very end I use the DataLoader class to create my train_data and valid_data that are shuffled to 
 # take away their inherent order. 
 
@@ -168,16 +165,16 @@ for i in range(len(class_index_end)):
 # I wrote a class that will turn them into map-style datasets 
         
 class ImageDataset(torch.utils.data.Dataset):
-
-    def __init__(self, X, y):
+    def __init__(self, X, y): # Need to first do a simple initialization of our data and labels
         self.X = X
         self.y = y
-        
-
-    def __len__(self):
+  
+    def __len__(self): # Need to specify how we calculate length of the dataset
         return len(self.X)
 
-    def __getitem__(self, index):
+    def __getitem__(self, index): # Need to tell it how to index our dataset. So, for the data, we need to grab the 0th index 
+                                  # since our data is an array of arrays in the form [ [data1], [data2], [data3] .... ]
+                                  # So, if I want the data at index 2, I need X[2][0] to get the data inside the brackets
         sample_train = self.X[index][0]
         sample_label = self.y[index]
 
@@ -188,7 +185,7 @@ validation_set = ImageDataset(data_for_valid, label_for_valid)
 
 # And finally, after all that, we have our train_data and valid_data dataloaders 
 train_data = DataLoader(training_set, batch_size=batch_size, shuffle=True) 
-valid_data = DataLoader(validation_set, batch_size=batch_size, shuffle=True) # We take the entire validation set as one batch 
+valid_data = DataLoader(validation_set, batch_size=batch_size, shuffle=True) 
 
 #________________________________________________________________________________________________________________________
 
@@ -207,7 +204,7 @@ def accuracy(prediction, label): # Need a way to measure accuracy. We do this by
     for i in range(len(pred)):
         if np.argmax(pred[i]) == np.argmax(lab[i]): # Each element of prediction and label is a length 10 vector. In each vector, the index of the max element refers to the class that's most strongly predicted.
             num_correct += 1                                # If the indices where they have their max elements line up, it means the predicted strongest class is the same as the actual class. Hence, it's a correct prediction.
-    #acc = float(num_correct/len(pred))
+    #acc = float(num_correct/len(pred)) # In the code below, we end up just needing how many correct predictions we have, instead of the ratio
     return num_correct
 
 def turn1hot(tensor_array): # A function to one-hot encode the labels of each batch 
@@ -220,10 +217,10 @@ def turn1hot(tensor_array): # A function to one-hot encode the labels of each ba
         arr[i] = zero_vec
     return np.asarray(arr) # Return the one hot encoded list as an array
 
-# All the kinds of CNN we have. Uncomment whichever you want to run. Note, with CeCNN and BothCNN you need to choose loss_fnc = crossentropy
+# Below are all the kinds of CNN we have. Uncomment whichever you want to run. Note, with CeCNN and BothCNN you need to choose loss_fnc = crossentropy
 
 #cnn = BasicCNN() # Over fitting model
-cnn = CNN() # best combination tested model 
+cnn = CNN() # Best tested model using MSE loss (ie no softmax on last layer) and 2 convolutional layers
 #cnn = BnCNN() # batch norm model
 #cnn = CeCNN() # cross entropy model
 #cnn = BothCNN() # both cross entropy and batch norm model
@@ -234,6 +231,7 @@ loss_fnc = nn.MSELoss(reduction='sum') # Initialize a MSE loss object, and speci
 
 optimizer = optim.SGD(cnn.parameters(), lr=learning_rate) #Set up the SGD optimizer
 
+# These are all just arrays to store information later for plotting
 valid_acc_array = [0]*epochs
 train_acc_array = [0]*epochs
 num_pred_correct_valid = 0
@@ -271,7 +269,7 @@ for i in range(0,epochs,1):
         loss.backward()
         optimizer.step()
     
-    # Every epoch I want to calculate the accuracy of the model 
+    # Every epoch I want to calculate the validation accuracy of the model using the model trained by that epoch 
     for batch_index, data_list in enumerate(valid_data):
         
         input_data = data_list[0].float()  # First element is the actual data tensors
@@ -289,7 +287,7 @@ for i in range(0,epochs,1):
         
         num_pred_correct_valid += accuracy(predictions, labels) # Get the accuracy for this epoch by running this through the accuracy function
     
-    # Now amalgamate the validation accuracy for the epoch, and reset the number of correct prediction counter
+    # Now amalgamate the validation and training accuracy for the epoch, and reset the number of correct prediction counter
     valid_acc_array[i] += float(num_pred_correct_valid/len(valid_data.dataset))
     num_pred_correct_valid = 0
     loss_array_valid[i] += float(loss_valid/batch_size)
@@ -320,7 +318,8 @@ plt.legend(['training accuracy', 'validation accuracy'])
 plt.tight_layout()
 plt.show()
 
-summary(cnn, input_size=(3,56,56))
+summary(cnn, input_size=(3,56,56)) # Gives a summary of the model, including how many parameters it has, shape of each layer's output, 
+                                   # and how much memory it takes up. We feed it the dimensions of our input (3 channels, of size 56 x56)
 
 print("---%s seconds ---" % (time.time() - start_time)) # Print out how long it took
 
